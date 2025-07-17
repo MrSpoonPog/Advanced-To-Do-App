@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced To-Do List</title>
+    <style>
+        :root {
+            --bg-colour: #f8f9fa;
+            --text-colour: #333;
+            --box-bg: #ffffff;
+            --border-colour: #dee2e6;
+            --primary-colour: #28a745;
+        }
+
+        [data-theme="dark"] {
+            --bg-colour: #2d2d2d;
+            --text-colour: #e0e0e0;
+            --box-bg: #1a1a1a;
+            --border-colour: #404040;
+            --primary-colour: #34d058;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--bg-colour);
+            color: var(--text-colour);
+            transition: background-color 0.3s ease;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section-box {
+            background: var(--box-bg);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-colour);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            min-height: 300px;
+        }
+
+        .calendar-day {
+            padding: 10px;
+            text-align: center;
+            border: 1px solid var(--border-colour);
+            border-radius: 4px;
+            min-height: 40px;
+        }
+
+        .calendar-day.highlight {
+            background-color: rgba(52, 208, 88, 0.2);
+            border: 2px solid var(--primary-colour);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: var(--border-colour);
+            border-radius: 10px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: var(--primary-colour);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+            width: 0;
+        }
+
+        .todo-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 8px 0;
+            background-color: var(--bg-colour);
+            border-radius: 5px;
+            border: 1px solid var(--border-colour);
+        }
+
+        .todo-item.completed {
+            opacity: 0.7;
+            text-decoration: line-through;
+        }
+
+        .motivation-section {
+            margin: 20px 0;
+            padding: 15px;
+            border-left: 4px solid var(--primary-colour);
+            background-color: rgba(52, 208, 88, 0.1);
+        }
+
+        .motivation-tip {
+            font-style: italic;
+            margin: 0;
+        }
+
+        .tip-button {
+            margin-top: 10px;
+            background-color: var(--primary-colour);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="settings">
+        <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+    </div>
+
+    <div class="motivation-section">
+        <p class="motivation-tip" id="currentTip"></p>
+        <button class="tip-button" onclick="showNextTip()">Next Tip</button>
+    </div>
+
+    <div class="container">
+        <div class="section-box">
+            <h2>New To-Do Item</h2>
+            <input type="text" id="todoInput" placeholder="Enter task">
+            <input type="date" id="deadlineInput">
+            <button id="addTaskBtn" onclick="saveTodo()">Add Task</button>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress"></div>
+            </div>
+        </div>
+
+        <div class="section-box">
+            <div class="calendar-header">
+                <button onclick="previousMonth()">← Previous</button>
+                <h2 id="currentMonth"></h2>
+                <button onclick="nextMonth()">Next →</button>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+    </div>
+
+    <div class="section-box todo-list">
+        <h2>My To-Do List</h2>
+        <div id="todoItems"></div>
+    </div>
+
+    <script>
+        // Motivational tips array
+        const motivationTips = [
+            "Start with the most important tasks first!",
+            "Break large tasks into smaller steps!",
+            "Regular breaks improve productivity!",
+            "Celebrate your completed tasks!",
+            "Review your progress daily!"
+        ];
+        let currentTipIndex = 0;
+
+        // State management
+        let todos = [];
+        let currentDate = new Date();
+        let currentMonth = currentDate.getMonth();
+        let currentYear = currentDate.getFullYear();
+        let editingId = null;
+
+        // Load todos from localStorage
+        function loadTodos() {
+            const storedTodos = localStorage.getItem('todos');
+            if (storedTodos) {
+                try {
+                    const parsedTodos = JSON.parse(storedTodos);
+                    return parsedTodos.map(todo => ({
+                        ...todo,
+                        deadline: new Date(todo.deadline),
+                        id: Number(todo.id) // Ensure IDs are numbers
+                    }));
+                } catch (e) {
+                    console.error("Error parsing todos:", e);
+                    return [];
+                }
+            }
+            return [];
+        }
+
+        // Initialize todos
+        todos = loadTodos();
+
+        // Initialize theme
+        if(localStorage.getItem('theme') === 'dark') {
+            document.body.setAttribute('data-theme', 'dark');
+        }
+
+        // Motivational tips functionality
+        function showNextTip() {
+            currentTipIndex = (currentTipIndex + 1) % motivationTips.length;
+            document.getElementById('currentTip').textContent = motivationTips[currentTipIndex];
+        }
+        showNextTip();
+
+        // Calendar functions
+        function generateCalendar(month, year) {
+            const calendarGrid = document.getElementById('calendarGrid');
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            calendarGrid.innerHTML = '';
+            
+            // Create empty days
+            for(let i = 0; i < firstDay; i++) {
+                calendarGrid.appendChild(createDayElement(''));
+            }
+
+            // Create days with tasks
+            for(let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const hasTodos = todos.some(todo => {
+                    const todoDate = new Date(todo.deadline);
+                    return (
+                        todoDate.getFullYear() === date.getFullYear() &&
+                        todoDate.getMonth() === date.getMonth() &&
+                        todoDate.getDate() === date.getDate()
+                    );
+                });
+                calendarGrid.appendChild(createDayElement(day, hasTodos));
+            }
+
+            // Fill remaining cells
+            const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+            while(calendarGrid.children.length < totalCells) {
+                calendarGrid.appendChild(createDayElement(''));
+            }
+
+            document.getElementById('currentMonth').textContent = 
+                new Date(year, month).toLocaleDateString('en-GB', { 
+                    month: 'long', 
+                    year: 'numeric' 
+                });
+        }
+
+        function createDayElement(day, hasTodos = false) {
+            const div = document.createElement('div');
+            div.className = `calendar-day ${hasTodos ? 'highlight' : ''}`;
+            div.textContent = day;
+            return div;
+        }
+
+        // Task management
+        function saveTodo() {
+            const todoInput = document.getElementById('todoInput');
+            const deadlineInput = document.getElementById('deadlineInput');
+            const addTaskBtn = document.getElementById('addTaskBtn');
+            
+            if (!todoInput.value.trim()) {
+                alert('Please enter a task description');
+                return;
+            }
+            if (!deadlineInput.value) {
+                alert('Please select a deadline');
+                return;
+            }
+
+            // Parse date correctly
+            const taskDate = new Date(deadlineInput.value);
+            
+            if (editingId !== null) {
+                // Find the actual index in the array
+                const index = todos.findIndex(t => Number(t.id) === Number(editingId));
+                if (index !== -1) {
+                    todos[index] = {
+                        ...todos[index],
+                        text: todoInput.value.trim(),
+                        deadline: taskDate
+                    };
+                    editingId = null;
+                    addTaskBtn.textContent = "Add Task"; // Reset button text
+                }
+            } else {
+                todos.push({
+                    id: Date.now(),
+                    text: todoInput.value.trim(),
+                    deadline: taskDate,
+                    completed: false
+                });
+            }
+
+            todoInput.value = '';
+            deadlineInput.value = '';
+            updateDisplay();
+            saveToLocalStorage();
+        }
+
+        function updateDisplay() {
+            renderTodos();
+            updateProgressBar();
+            generateCalendar(currentMonth, currentYear);
+        }
+
+        function updateProgressBar() {
+            const totalTasks = todos.length;
+            const completedTasks = todos.filter(todo => todo.completed).length;
+            const progressPercentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+            
+            const progressElement = document.getElementById('progress');
+            progressElement.style.width = `${progressPercentage}%`;
+        }
+
+        function renderTodos() {
+            const todoItems = document.getElementById('todoItems');
+            if (todos.length === 0) {
+                todoItems.innerHTML = '<p>No tasks yet. Add a task to get started!</p>';
+                return;
+            }
+            
+            todoItems.innerHTML = '';
+            
+            // Sort todos by deadline
+            const sortedTodos = [...todos].sort((a, b) => {
+                return new Date(a.deadline) - new Date(b.deadline);
+            });
+            
+            sortedTodos.forEach(todo => {
+                const todoItem = document.createElement('div');
+                todoItem.className = `todo-item ${todo.completed ? 'completed' : ''}`;
+                
+                const todoInfo = document.createElement('div');
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = todo.completed;
+                checkbox.addEventListener('change', () => toggleTodo(todo.id));
+                
+                const todoText = document.createElement('span');
+                todoText.textContent = todo.text;
+                
+                const todoDate = document.createElement('small');
+                todoDate.textContent = ' ' + formatDate(new Date(todo.deadline));
+                
+                todoInfo.appendChild(checkbox);
+                todoInfo.appendChild(todoText);
+                todoInfo.appendChild(todoDate);
+                
+                const todoActions = document.createElement('div');
+                
+                const editBtn = document.createElement('button');
+                editBtn.textContent = 'Edit';
+                editBtn.addEventListener('click', () => editTodo(todo.id));
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.addEventListener('click', () => deleteTodo(todo.id));
+                
+                todoActions.appendChild(editBtn);
+                todoActions.appendChild(deleteBtn);
+                
+                todoItem.appendChild(todoInfo);
+                todoItem.appendChild(todoActions);
+                
+                todoItems.appendChild(todoItem);
+            });
+        }
+
+        function formatDate(date) {
+            return date.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+            });
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('todos', JSON.stringify(todos));
+        }
+
+        // Event handlers
+        function toggleDarkMode() {
+            const body = document.body;
+            if(body.getAttribute('data-theme') === 'dark') {
+                body.removeAttribute('data-theme');
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        function toggleTodo(id) {
+            const todoIndex = todos.findIndex(t => Number(t.id) === Number(id));
+            if (todoIndex !== -1) {
+                todos[todoIndex].completed = !todos[todoIndex].completed;
+                updateDisplay();
+                saveToLocalStorage();
+            }
+        }
+
+        function editTodo(id) {
+            const todo = todos.find(t => Number(t.id) === Number(id));
+            if (todo) {
+                document.getElementById('todoInput').value = todo.text;
+                
+                // Format date for input field (YYYY-MM-DD)
+                const deadlineDate = new Date(todo.deadline);
+                let month = '' + (deadlineDate.getMonth() + 1);
+                let day = '' + deadlineDate.getDate();
+                const year = deadlineDate.getFullYear();
+                
+                if (month.length < 2) month = '0' + month;
+                if (day.length < 2) day = '0' + day;
+                
+                document.getElementById('deadlineInput').value = `${year}-${month}-${day}`;
+                editingId = Number(id);
+                
+                // Change button text to indicate editing mode
+                document.getElementById('addTaskBtn').textContent = "Update Task";
+                
+                // Scroll to the form
+                document.querySelector('.section-box').scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        function deleteTodo(id) {
+            todos = todos.filter(t => Number(t.id) !== Number(id));
+            updateDisplay();
+            saveToLocalStorage();
+        }
+
+        function previousMonth() {
+            currentMonth--;
+            if(currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            generateCalendar(currentMonth, currentYear);
+        }
+
+        function nextMonth() {
+            currentMonth++;
+            if(currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            }
+            generateCalendar(currentMonth, currentYear);
+        }
+
+        // Initial setup
+        generateCalendar(currentMonth, currentYear);
+        updateDisplay();
+    </script>
+</body>
+</html>
